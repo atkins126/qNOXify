@@ -61,7 +61,7 @@ procedure TSpeedLimitsDlg.SetSpeedLimits(Up, Dl, AUp, ADl: integer);
   begin
     if (S div (1024*1024))>0 then
     begin
-      Result := 1023 + (S div 1024*1024);
+      Result := 1023 + (S div (1024*1024));
     end else
     if (S div 1024)>0 then
     begin

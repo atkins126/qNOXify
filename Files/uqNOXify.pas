@@ -4,706 +4,161 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, uqBitAPITypes, uqBitAPI, uqBitObject,
-  Vcl.ExtCtrls, Vcl.Grids, Vcl.StdCtrls, uqBitFormat, uSelectServer, Vcl.Menus,
-  Vcl.ComCtrls, System.UITypes, Vcl.CheckLst, uAppTrackMenus,
-  System.Generics.Collections,  System.Generics.Defaults, uAddEditCat,
-  Vcl.Buttons;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, System.Generics.Collections,
+  uqBitAPITypes, uqBitAPI, uqBitObject, Vcl.ExtCtrls, uqBitFormat, Vcl.Menus,
+  Vcl.ComCtrls, uGrid, Vcl.StdCtrls, Vcl.Buttons, Vcl.Grids, uSetLocation, uSelectServer, uAddServer,
+  uExternalIP;
 
 const
-  MAXCOL = 100;
-  MAXROW = 2000;
-  ROWHEIGHT = 18;
-  NoSelection: TGridRect = (Left: 0; Top: -1; Right: 0; Bottom: -1);
+  THREAD_WAIT_TIME_ME = 1500;
 
 type
-  TGridData = class
-    // Cols
-    Name: string;
-    Field: string;
-    Formater: TVarDataFormater;
-    Width: integer;
-    Visible: Boolean;
-    // Rows
-    Selected: Boolean;
+  TqBitThread = class(TThread)
+    Refresh: boolean; // Thread Safe
     Hash: string;
-    // Global
-    LastRowSelected: integer;
-    LastHashSelected: string;
-    SortField: string;
-    SortReverse: Boolean;
-    HintX: integer;
-    HintY: integer;
+    qBTh: TqBitObject;
   end;
 
-  TqNOXifyFrm = class(TForm)
-    Timer: TTimer;
-    PMHdrCol: TPopupMenu;
-    Hide: TMenuItem;
-    ShowAll: TMenuItem;
-    PMIShowHide: TMenuItem;
-    N2: TMenuItem;
-    N1: TMenuItem;
-    PMISortCol: TMenuItem;
-    PMCol: TPopupMenu;
-    PMIPause: TMenuItem;
-    PMIResume: TMenuItem;
-    N3: TMenuItem;
-    N4: TMenuItem;
-    PMIDeleteTorrent: TMenuItem;
-    PMIDeleteData: TMenuItem;
-    StatusBar: TStatusBar;
-    PMStatus: TPopupMenu;
-    PMIToggleSpeedLimits: TMenuItem;
+  TqBitTPeersThread = class(TqBitThread)
+    qBTPeers: TqBitTorrentPeersDataType;
+    procedure Execute; override;
+  end;
+
+  TqBitTTrkrsThread = class(TqBitThread)
+    qBTTrkrs: TqBitTrackersType;
+    procedure Execute; override;
+  end;
+
+  TqBitTInfosThread = class(TqBitThread)
+    qBTInfo: TqBitTorrentInfoType;
+    procedure Execute; override;
+  end;
+
+  TqBitMainThread = class(TqBitThread)
+    qBMain: TqBitMainDataType;
+    procedure Execute; override;
+  end;
+
+  TqBitMainForm = class(TForm)
+    MainFrame: TSGFrm;
     Panel1: TPanel;
-    SG: TStringGrid;
-    Panel2: TPanel;
-    Panel3: TPanel;
-    Panel4: TPanel;
-    Splitter1: TSplitter;
-    N5: TMenuItem;
-    SetLocation1: TMenuItem;
-    Rename1: TMenuItem;
-    PMIEditTrackers: TMenuItem;
-    N6: TMenuItem;
-    PMICategory: TMenuItem;
-    PMITags: TMenuItem;
-    PMISpeedLimits: TMenuItem;
-    N7: TMenuItem;
-    New1: TMenuItem;
-    Reset1: TMenuItem;
-    Reset2: TMenuItem;
-    AAAA1: TMenuItem;
-    BBB1: TMenuItem;
-    Assign1: TMenuItem;
-    Delete1: TMenuItem;
-    PMICatReset: TMenuItem;
-    N8: TMenuItem;
-    New2: TMenuItem;
-    N9: TMenuItem;
-    orrentManagement1: TMenuItem;
-    Enable1: TMenuItem;
-    Disable1: TMenuItem;
-    EditSearch: TEdit;
-    Label1: TLabel;
-    CBTag: TComboBox;
-    CBCat: TComboBox;
-    CBStatus: TComboBox;
-    Label2: TLabel;
-    Label3: TLabel;
-    Label4: TLabel;
-    BitBtn1: TBitBtn;
-    N10: TMenuItem;
-    ForceRecheck1: TMenuItem;
-    ForceReannounce1: TMenuItem;
     PageControl1: TPageControl;
     TabSheet1: TTabSheet;
-    SGDetails: TStringGrid;
     TabSheet2: TTabSheet;
-    N11: TMenuItem;
-    SelectAll1: TMenuItem;
-    Add1: TMenuItem;
-    PMIAddFile: TMenuItem;
-    AddMagnet: TMenuItem;
+    TabSheet3: TTabSheet;
+    TrkrFrame: TSGFrm;
+    PeersFrame: TSGFrm;
+    Label1: TLabel;
+    EditSearch: TEdit;
+    BitBtn1: TBitBtn;
+    Label2: TLabel;
+    CBStatus: TComboBox;
+    Label3: TLabel;
+    CBCat: TComboBox;
+    StatusBar: TStatusBar;
+    Splitter1: TSplitter;
+    Label4: TLabel;
+    CBTag: TComboBox;
+    SGDetails: TStringGrid;
+    PMMain: TPopupMenu;
+    ITMSelectAll: TMenuItem;
+    SelectAll2: TMenuItem;
+    ITMPause: TMenuItem;
+    ITMResume: TMenuItem;
+    N1: TMenuItem;
+    ITMAdd: TMenuItem;
+    ITMDelete: TMenuItem;
+    ITMDelTOnly: TMenuItem;
+    ITMDelWithData: TMenuItem;
+    ITMAddTFile: TMenuItem;
+    ITMAddMagnetURL: TMenuItem;
     OpenTorrent: TFileOpenDialog;
-    Warning: TMemo;
-    SLpeers: TStringGrid;
-    procedure FormCreate(Sender: TObject);
-    procedure SGDrawCell(Sender: TObject; ACol, ARow: Integer; Rect: TRect;
-      State: TGridDrawState);
-    procedure SGMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure SGMouseWheelDown(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
-    procedure SGMouseWheelUp(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
+    N2: TMenuItem;
+    ITMSetLoc: TMenuItem;
+    PMStatus: TPopupMenu;
+    PMIToggleSpeedLimits: TMenuItem;
+    N7: TMenuItem;
+    PMISpeedLimits: TMenuItem;
+    ITMRename: TMenuItem;
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
-    procedure TimerTimer(Sender: TObject);
-    procedure SGDblClick(Sender: TObject);
-    procedure HideClick(Sender: TObject);
-    procedure ShowAllClick(Sender: TObject);
-    procedure SGMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
-    procedure PMHdrColPopup(Sender: TObject);
-    procedure PMISortColClick(Sender: TObject);
-    procedure PMIDeleteTorrentClick(Sender: TObject);
-    procedure PMIDeleteDataClick(Sender: TObject);
-    procedure StatusBarContextPopup(Sender: TObject; MousePos: TPoint;
-      var Handled: Boolean);
-    procedure PMIToggleSpeedLimitsClick(Sender: TObject);
-    procedure CBStatusSelect(Sender: TObject);
-    procedure SetLocation1Click(Sender: TObject);
-    procedure Rename1Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
-    procedure PMISpeedLimitsClick(Sender: TObject);
-    procedure StatusBarClick(Sender: TObject);
-    procedure SGKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure Reset1Click(Sender: TObject);
-    procedure PMColPopup(Sender: TObject);
-    procedure AAAA1Click(Sender: TObject);
-    procedure New1Click(Sender: TObject);
-    procedure PMIResumeClick(Sender: TObject);
-    procedure PMIPauseClick(Sender: TObject);
-    procedure PMICatResetClick(Sender: TObject);
-    procedure New2Click(Sender: TObject);
-    procedure Enable1Click(Sender: TObject);
-    procedure Disable1Click(Sender: TObject);
     procedure BitBtn1Click(Sender: TObject);
-    procedure ForceRecheck1Click(Sender: TObject);
-    procedure ForceReannounce1Click(Sender: TObject);
-    procedure SGDetailsSelectCell(Sender: TObject; ACol, ARow: Integer;
-      var CanSelect: Boolean);
-    procedure SelectAll1Click(Sender: TObject);
-    procedure PMIAddFileClick(Sender: TObject);
-    procedure AddMagnetClick(Sender: TObject);
+    procedure ITMSelectAllClick(Sender: TObject);
+    procedure ITMResumeClick(Sender: TObject);
+    procedure ITMPauseClick(Sender: TObject);
+    procedure PageControl1Change(Sender: TObject);
+    procedure ITMAddTFileClick(Sender: TObject);
+    procedure StatusBarClick(Sender: TObject);
+    procedure ITMDelWithDataClick(Sender: TObject);
+    procedure ITMDelTOnlyClick(Sender: TObject);
+    procedure ITMSetLocClick(Sender: TObject);
+    procedure PMISpeedLimitsClick(Sender: TObject);
+    procedure ITMAddMagnetURLClick(Sender: TObject);
+    procedure ITMRenameClick(Sender: TObject);
   private
-    procedure TrackMenuNotifyHandler(Sender: TMenu; Item: TMenuItem; var CanClose: Boolean);
-    //function GetLastGridHashe: string;
-  protected
-    procedure WMDropFiles(var Msg: TMessage); message WM_DROPFILES;
-    procedure WndProc(var Msg: TMessage); override;
-  public
+    { Private declarations }
+    FMainLock : Boolean;
+    FCurrentSelectedHash: string;
+    ThPeers: TqBitTPeersThread;
+    ThInfo: TqBitTInfosThread;
+    ThMain: TqBitMainThread;
+    ThTrkrs: TqBitTTrkrsThread;
     qB: TqBitObject;
-    qBMain: TqBitMainDataType;
-    qBTInfo: TqBitTorrentInfoType;
     qBPrefs: TqBitPreferencesType;
-    function GetColData(Index: Integer): TGridData;
-    function GetRowData(Index: Integer): TGridData;
 
-    function GetSelectedGridHashes: TStringList;
-    function GetAllGridHashes: TStringList;
-    function GetAllServerHashes: TStringList;
-    function GetLastGridHash: string;
+    function GetGridSelHashes: TStringList;
+    function GetGridSelTorrents: TObjectList<TqBitTorrentType>;
+    function GetLastGridSelTorrent: TqBitTorrentType;
+  protected
+     procedure WMDropFiles(var Msg: TMessage); message WM_DROPFILES;
+  public
+    { Public declarations }
 
-    function GetSelectedTorrents: TObjectList<TqBitTorrentType>;
-    function GetLastSelectedTorrent: TqBitTorrentType;
+    IP: TExternalIP;
+    qBMain: TqBitMainDataType;
+    qBTPeers: TqBitTorrentPeersDataType;
+    qBTTrkrs: TqBitTrackersType;
+    qBTInfo: TqBitTorrentInfoType;
 
-    procedure AddCol(Index: Integer; Name, Field: string; Fmt: TVarDataFormater; Width: Integer; Visible: boolean);
-    procedure HideCol(ACol: integer);
-    procedure ShowCol(ACol: integer);
-    procedure ShowAllCol;
-    procedure UpdateUI;
-    procedure ShowHideItemClicked(Sender: TObject);
-    procedure CatItemClicked(Sender: TObject);
-    procedure SetCategoryClicked(Sender : TObject);
-    procedure DeleteCategoryClicked(Sender : TObject);
-    procedure ToggleSortCol(ACol: integer);
+
+    // UI
+    procedure UpdateMainUI;
+    procedure UpdatePeersUI;
+    procedure UpdateTrkrsUI;
+    procedure UpdateTinfosUI;
+
+    // MainGrid Frame Callbacks
+    procedure DoUpdateMainUI(Sender: TObject);
+    procedure DoRowsSelectedMain(Sender: TObject);
+    procedure DoUpdatePeersUI(Sender: TObject);
+    procedure DoRowsSelectedPeers(Sender: TObject);
+    procedure DoUpdateTrkrsUI(Sender: TObject);
+    procedure DoUpdateTinfoUI(Sender: TObject);
+    procedure DoMainEventPopup(Sender: TObject; X, Y, aCol, aRow: integer);
+
+    // Threads Syncs
+    procedure ThreadDisconnect(Sender: TThread);
+    procedure ThreadGetSelectedHash(Sender: TqBitThread);
+    procedure ThreadTPeersUpdated(Sender: TqBitTPeersThread);
+    procedure ThreadTInfoUpdated(Sender: TqBitTInfosThread);
+    procedure ThreadMainUpdated(Sender: TqBitMainThread);
+    procedure ThreadTTrkrUpdated(Sender: TqBitTTrkrsThread);
   end;
 
 var
-  qNOXifyFrm: TqNOXifyFrm;
+  qBitMainForm: TqBitMainForm;
+
 
 implementation
-uses Math, ShellAPI, RTTI, uSetLocation, uSpeedLimitsDlg, uAddTorrent;
+uses RTTI, System.Generics.Defaults, uAddTorrent, uSpeedLimitsDlg, ShellAPI;
 
 {$R *.dfm}
 
-function TqNOXifyFrm.GetColData(Index: Integer): TGridData;
+procedure TqBitMainForm.FormShow(Sender: TObject);
 begin
-  Result := TGridData(SG.Objects[Index, 0]);
-end;
+  SGDetails.Selection := NoSelection;
+  DragAcceptFiles (Self.handle, True);
 
-function TqNOXifyFrm.GetRowData(Index: Integer): TGridData;
-begin
-  Result := TGridData(SG.Objects[0, Index]);
-end;
-
-function TqNOXifyFrm.GetSelectedGridHashes: TStringList;
-begin
-  Result := TStringList.Create;
-  for var Row := 0 to SG.RowCount - 1 do
-    if SG.RowHeights[Row] > 0 then
-    begin
-      var RD := GetRowData(Row);
-      if RD.Selected then
-        Result.Add(RD.Hash);
-    end;
-end;
-
-function TqNOXifyFrm.GetSelectedTorrents: TObjectList<TqBitTorrentType>;
-begin
-  Result := TObjectList<TqBitTorrentType>(False);
-  var HL := GetSelectedGridHashes;
-    for var T in qBMain.Ftorrents do
-      if HL.IndexOf(T.Key) <> -1 then
-        Result.Add(TqBitTorrentType(T.Value));
-end;
-
-function TqNOXifyFrm.GetAllGridHashes: TStringList;
-begin
-  Result := TStringList.Create;
-  for var Row := 0 to SG.RowCount - 1 do
-    if SG.RowHeights[Row] > 0 then
-    begin
-      var RD := GetRowData(Row);
-      Result.Add(RD.Hash);
-    end;
-end;
-
-function TqNOXifyFrm.GetAllServerHashes: TStringList;
-begin
-  Result := TStringList.Create;
-  for var T in qBMain.Ftorrents do
-    Result.Add(T.Key);
-end;
-
-function TqNOXifyFrm.GetLastGridHash: string;
-begin
-  Result := GetColData(0).LastHashSelected;
-end;
-
-function TqNOXifyFrm.GetLastSelectedTorrent: TqBitTorrentType;
-var
-  Res : TqBitTorrentBaseType;
-begin
-  Result := Nil;
-  if qBMain.Ftorrents.TryGetValue(GetLastGridHash, Res) then
-    Result := TqBitTorrentType(Res);
-end;
-
-procedure TqNOXifyFrm.HideCol(ACol: integer);
-begin
-  var GD := GetColData(ACol);
-  if GD.Visible then
-  begin
-    GD.Width := SG.ColWidths[ACol];
-    SG.ColWidths[ACol] := -1;
-    GD.Visible := False;
-  end;
-end;
-
-procedure TqNOXifyFrm.New1Click(Sender: TObject);
-begin
-  if AddEditCatDlg.ShowModal = mrOK then
-    qB.AddNewCategory(AddEditCatDlg.EDName.Text, AddEditCatDlg.EDPath.Text);
-end;
-
-procedure TqNOXifyFrm.New2Click(Sender: TObject);
-begin
-  var IMsg := InputBox('Add Tags (comma separated)', 'Tags','');
-  if IMsg <> '' then qb.CreateTags(IMsg);
-end;
-
-procedure TqNOXifyFrm.PMIToggleSpeedLimitsClick(Sender: TObject);
-begin
-  qB.ToggleAlternativeSpeedLimits;
-end;
-
-procedure TqNOXifyFrm.Rename1Click(Sender: TObject);
-begin
-  var T := GetLastSelectedTorrent;
-  if not assigned(T) then Exit;
-  var NewName := InputBox('Rename', 'New Name :', T.Fname);
-  if  NewName <> '' then qB.SetTorrentName(T.Fhash, NewName);
-end;
-
-procedure TqNOXifyFrm.Reset1Click(Sender: TObject);
-begin
-  var SH := GetSelectedGridHashes;
-  qB.SetTorrentCategory(SH, '');
-  SH.Free;
-end;
-
-procedure TqNOXifyFrm.PMIAddFileClick(Sender: TObject);
-begin
-  if OpenTorrent.Execute then
-  begin
-    var LF := TStringList.Create;
-    LF.Add(OpenTorrent.FileName);
-    AddTorrentDlg.qB := qB;
-    AddTorrentDlg.FileList := LF;
-    AddTorrentDlg.ShowModal;
-    LF.Free;
-  end;
-end;
-
-procedure TqNOXifyFrm.PMICatResetClick(Sender: TObject);
-begin
-  var SH := GetSelectedGridHashes;
-  for var i := 0 to SH.Count - 1 do
-    qB.RemoveTorrentTags(SH,'');
-  SH.Free
-end;
-
-procedure TqNOXifyFrm.PMIDeleteDataClick(Sender: TObject);
-begin
-  var SH := GetSelectedGridHashes;
-  for var i := 0 to SH.Count - 1 do
-    qB.DeleteTorrents(SH, True);
-  SH.Free;
-end;
-
-procedure TqNOXifyFrm.PMIDeleteTorrentClick(Sender: TObject);
-begin
-  var SH := GetSelectedGridHashes;
-  for var i := 0 to SH.Count - 1 do
-    qB.DeleteTorrents(SH, False);
-  SH.Free;
-end;
-
-procedure TqNOXifyFrm.PMIPauseClick(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  if assigned(HL) then qB.PauseTorrents(HL);
-  HL.Free;
-end;
-
-procedure TqNOXifyFrm.ShowCol(ACol: integer);
-begin
-  var GD := GetColData(ACol);
-  if not GD.Visible then
-  begin
-    SG.ColWidths[ACol] := GD.Width;
-    GD.Visible := True;
-  end;
-end;
-
-procedure TqNOXifyFrm.ShowHideItemClicked(Sender: TObject);
-begin
-  if GetColData(TMenuItem(Sender).Tag).visible then
-    HideCol(TMenuItem(Sender).Tag)
-  else
-    ShowCol(TMenuItem(Sender).Tag);
-end;
-
-procedure TqNOXifyFrm.CatItemClicked(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  if HL.Count > 0 then
-    if TMenuItem(Sender).Checked then
-    begin
-      qB.AddTorrentTags(HL, TMenuItem(Sender).Caption);
-    end else begin
-      qB.RemoveTorrentTags(HL, TMenuItem(Sender).Caption);
-    end;
-  HL.Free;
-end;
-
-procedure TqNOXifyFrm.StatusBarClick(Sender: TObject);
-var
-  P : TPoint;
-begin
-  GetCursorPos(P);
-  PMStatus.Popup(
-    P.X,
-    P.Y
-  );
-end;
-
-procedure TqNOXifyFrm.StatusBarContextPopup(Sender: TObject; MousePos: TPoint;
-  var Handled: Boolean);
-begin
-  PMStatus.Popup(
-    StatusBar.ClientToScreen(MousePos).X,
-    StatusBar.ClientToScreen(MousePos).Y
-  );
-end;
-
-procedure TqNOXifyFrm.PMIResumeClick(Sender: TObject);
-begin
-  var SH := GetSelectedGridHashes;
-  qB.ResumeTorrents(SH);
-  SH.Free
-end;
-
-procedure TqNOXifyFrm.PMISortColClick(Sender: TObject);
-begin
-  ToggleSortCol(PMHdrCol.Tag);
-end;
-
-procedure TqNOXifyFrm.PMISpeedLimitsClick(Sender: TObject);
-begin
-  SpeedLimitsDlg.SetSpeedLimits(
-    qBPrefs.Fup_limit,
-    qBPrefs.Fdl_limit,
-    qBPrefs.Falt_up_limit,
-    qBPrefs.Falt_dl_limit
-  );
-  if SpeedLimitsDlg.ShowModal = mrOk then
-  begin
-    var NewPrefs := TqBitPreferencesType.Create;
-      SpeedLimitsDlg.GetSpeedLimits(
-      NewPrefs.Fup_limit,
-      NewPrefs.Fdl_limit,
-      NewPrefs.Falt_up_limit,
-      NewPrefs.Falt_dl_limit
-      );
-    qB.SetPreferences(NewPrefs);
-    qBPrefs.Free;
-    qBPrefs := qB.GetPreferences;
-    NewPrefs.Free;
-  end;
-end;
-
-procedure TqNOXifyFrm.DeleteCategoryClicked(Sender : TObject);
-var
-  Cat: string;
-begin
-  Cat := TMenuItem(TMenuItem(Sender).Parent).Caption;
-  var HL := TStringList.Create;
-  for var T in qBMain.Ftorrents do
-      if TqBitTorrentType(T.Value).Fcategory = Cat then
-        HL.Add(TqBitTorrentType(T.Value).Fhash);
-  var SH := GetSelectedGridHashes;
-  if qB.RemoveCategories(Cat) then
-    qB.SetTorrentCategory(HL, Cat);
-  HL.Free;
-  SH.Free;
-end;
-
-procedure TqNOXifyFrm.Disable1Click(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  qB.SetAutomaticTorrentManagement(HL, False);
-  HL.Free;
-end;
-
-procedure TqNOXifyFrm.Enable1Click(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  qB.SetAutomaticTorrentManagement(HL, True);
-  HL.Free
-end;
-
-procedure TqNOXifyFrm.SelectAll1Click(Sender: TObject);
-begin
-  for var i:= 1 to SG.RowCount  - 1 do
-    if assigned(GetRowData(i)) then
-      GetRowData(i).Selected := True;
-end;
-
-procedure TqNOXifyFrm.SetCategoryClicked(Sender : TObject);
-var
-  Cat: string;
-begin
-  Cat := TMenuItem(TMenuItem(Sender).Parent).Caption;
-  var SH := GetSelectedGridHashes;
-  if SH.Count > 0 then
-    qB.SetTorrentCategory(SH, TMenuItem(TMenuItem(Sender).Parent).Caption);
-  SH.Free;
-end;
-
-procedure TqNOXifyFrm.PMColPopup(Sender: TObject);
-begin
-
-    // Categories
-
-    for var i := PMICategory.Count -1 downto 3 do
-      PMICategory.Items[i].Free;
-
-    for var C in qBMain.Fcategories do
-      begin
-       var NewItem := TMenuItem.Create(PMHdrCol);
-      NewItem.Caption := C.Key;
-      NewItem.Tag := 0;
-      PMICategory.Add(NewItem);
-
-
-      var NewItem2 := TMenuItem.Create(PMHdrCol);
-      NewItem2.Caption := 'Assign';
-      NewItem2.OnClick := SetCategoryClicked;
-      NewItem.Add(NewItem2);
-
-      var NewItem3 := TMenuItem.Create(PMHdrCol);
-      NewItem3.Caption := 'Delete';
-      NewItem3.OnClick := DeleteCategoryClicked;;
-      NewItem.Add(NewItem3);
-    end;
-
-    // Tags
-    for var i := PMITags.Count -1 downto 3 do
-      PMITags.Items[i].Free;
-
-    for var i := 0 to qBMain.Ftags.Count - 1  do
-    begin
-      var NewItem := TMenuItem.Create(PMHdrCol);
-      NewItem.AutoCheck := True;
-      NewItem.Caption := qBMain.Ftags.Items[i];
-      NewItem.Tag := i + 1;
-      NewItem.GroupIndex := 0;
-      NewItem.OnClick := CatItemClicked;
-      PMITags.Add(NewItem);
-    end;
-
-end;
-
-procedure TqNOXifyFrm.PMHdrColPopup(Sender: TObject);
-begin
-   for var i := PMIShowHide.Count -1 downto 0 do
-    PMIShowHide.Items[i].Free;
-
-  for var i:= 1 to SG.ColCount -1 do
-    if GetColData(i).Name <> '' then
-    begin
-      var NewItem := TMenuItem.Create(PMHdrCol);
-      NewItem.AutoCheck := True;
-      NewItem.Caption := GetColData(i).Name;
-      NewItem.Checked := GetColData(i).Visible;
-      NewItem.Tag := i;
-      NewItem.GroupIndex := 0;
-      NewItem.OnClick := ShowHideItemClicked;
-      PMIShowHide.Add(NewItem);
-    end;
-end;
-
-procedure TqNOXifyFrm.TrackMenuNotifyHandler(Sender: TMenu; Item: TMenuItem; var CanClose: Boolean);
-begin
-  CanClose := Item.Tag = 0;
-end;
-
-procedure TqNOXifyFrm.WndProc(var Msg: TMessage);
-begin
-  FormMainMenuWndProcMessage(Msg, Self);
-  inherited;
-end;
-
-procedure TqNOXifyFrm.ShowAllClick(Sender: TObject);
-begin
-  for var i := 0 to SG.RowCount -1 do
-      if ( SG.ColWidths[i] = -1) and ( GetColData(i).Visible = False) then
-        ShowCol(i);
-end;
-
-procedure TqNOXifyFrm.SGMouseMove(Sender: TObject; Shift: TShiftState; X,
-  Y: Integer);
-var
-  P : TPoint;
-  ACol, ARow : integer;
-begin
-  GetCursorPos(P);
-  SG.MouseToCell(SG.ScreenToClient(P).X, SG.ScreenToClient(P).Y, ACol, ARow);
-  if ( (GetColData(0).HintX <> P.X) or (GetColData(0).HintY <> P.Y) ) then
-  begin
-    if (ACol<1) or (ARow<1) then Exit;
-    SG.Hint := SG.Cells[0, ARow] + #$D#$A + SG.Cells[ACol, 0] + ' : ' +SG.Cells[ACol, ARow];
-    Application.ActivateHint(P);
-    Application.HintPause := 2000;
-    Application.HintHidePause := 10000;
-    GetColData(0).HintX := P.X;
-    GetColData(0).HintY := P.Y;
-    SG.ShowHint := True;
-  end;
-  // Caption := X.ToString + ' - ' + Y.ToString +' - '+ random(9999).ToString;
-end;
-
-procedure TqNOXifyFrm.HideClick(Sender: TObject);
-begin
-  HideCol(PMHdrCol.Tag);
-end;
-
-procedure TqNOXifyFrm.AAAA1Click(Sender: TObject);
-begin
- Caption := TMenuItem(Sender).Caption;
-end;
-
-procedure TqNOXifyFrm.AddCol(Index: Integer; Name, Field: string; Fmt: TVarDataFormater; Width: Integer; Visible: Boolean);
-begin
-  var GD := TGridData(SG.Objects[Index, 0]);
-  GD.Name := Name;
-  GD.Field := Field;
-  GD.Formater := Fmt;
-  GD.Width := Width;
-  GD.Visible := Visible;
-  SG.Cells[Index, 0] := Name;
-  SG.ColWidths[Index] := -1;
-  if Visible then SG.ColWidths[Index] := Width;
-  SG.RowHeights[Index] := ROWHEIGHT;
-  var NewItem := TMenuItem.Create(PMHdrCol);
-  NewItem.Caption := Name;
-  PMIShowHide.Add(NewItem);
-end;
-
-procedure TqNOXifyFrm.AddMagnetClick(Sender: TObject);
-begin
-  var URI := InputBox('Magnet URI Download :', 'URI : ', '');
-  if URI <> '' then qB.AddNewTorrentUrl(URI);
-end;
-
-procedure TqNOXifyFrm.BitBtn1Click(Sender: TObject);
-begin
-  Self.EditSearch.Clear;
-end;
-
-procedure TqNOXifyFrm.CBStatusSelect(Sender: TObject);
-begin
-  UpdateUI;
-end;
-
-procedure TqNOXifyFrm.ForceReannounce1Click(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  qB.ReannounceTorrents(HL);
-  HL.Free
-end;
-
-procedure TqNOXifyFrm.ForceRecheck1Click(Sender: TObject);
-begin
-  var HL := GetSelectedGridHashes;
-  qB.RecheckTorrents(HL);
-  HL.Free
-end;
-
-procedure TqNOXifyFrm.FormClose(Sender: TObject; var Action: TCloseAction);
-begin
-  // Action := caFree;
-end;
-
-procedure TqNOXifyFrm.FormCreate(Sender: TObject);
-begin
-  Warning.Visible := False;
-  PageControl1.ActivePageIndex := 0;
-
-  SGDetails.Selection:= NoSelection;
-  SLPeers.Selection := NoSelection;
-
-  PMHdrCol.TrackMenu := True;
-  PMHdrCol.OnTrackMenuNotify := TrackMenuNotifyHandler;
-  PMCol.TrackMenu := True;
-  PMCol.OnTrackMenuNotify := TrackMenuNotifyHandler;
-
-
-  SG.RowCount := MAXROW;
-  SG.ColCount := MAXCOL;
-  for var i := 0 to SG.ColCount - 1 do
-    for var j := 0 to SG.RowCount - 1 do
-    begin
-      SG.ColWidths[i] := -1;
-      SG.RowHeights[j] := -1;
-      SG.Objects[i, j] := TGridData.Create;;
-    end;
-
-  var Row := -1;
-  Inc(Row); AddCol(Row, 'Name', 'Fname', VarFormatString, 240, True);
-  Inc(Row); AddCol(Row, 'Size', 'Fsize', VarFormatBKM, 84, True);
-  Inc(Row); AddCol(Row, 'Progress', 'Fprogress', VarFormatPercent, 84, True);
-  Inc(Row); AddCol(Row, 'Status', 'Fstate', VarFormatString, 84, True);
-  Inc(Row); AddCol(Row, 'Seeds', 'Fnum_seeds', VarFormatString, 84, True);
-  Inc(Row); AddCol(Row, 'Peers', 'Fnum_leechs', VarFormatString, 84, True);
-  Inc(Row); AddCol(Row, 'Down Speed', 'Fdlspeed', VarFormatBKMPerSec, 84, True);
-  Inc(Row); AddCol(Row, 'Upload Speed', 'Fupspeed', VarFormatBKMPerSec, 84, True);
-  Inc(Row); AddCol(Row, 'ETA', 'Feta', VarFormatDeltaSec, 128, True);
-  Inc(Row); AddCol(Row, 'Ratio', 'Fratio', VarFormatFloat2d, 84, True);
-  Inc(Row); AddCol(Row, 'Category', 'Fcategory', VarFormatString, 84, True);
-  Inc(Row); AddCol(Row, 'Tags', 'Ftags', VarFormatString, 84, True);
-  Inc(Row); AddCol(Row, 'Added On', 'Fadded_on', VarFormatDate, 128, True);
-  Inc(Row); AddCol(Row, 'Availability', 'Favailability', VarFormatMulti, 84, True);
-
-  var rttictx := TRttiContext.Create();
-  var rttitype := rttictx.GetType(TqBitTorrentType);
-  for var field in rttitype.GetFields do
-  begin
-    var Title := 'Raw: ' + field.Name;
-    Inc(Row); AddCol(Row, Title, field.Name, VarFormatString, 84, False);
-  end;
-  rttictx.Free;
-
-  GetColData(0).SortField := 'Fname';
-  GetColData(0).SortReverse := False;
-end;
-
-procedure TqNOXifyFrm.FormShow(Sender: TObject);
-begin
-  Warning.Visible := False;
   if SelectServerDlg.ShowModal = mrCancel then
   begin
     Close;
@@ -712,110 +167,141 @@ begin
   var Srv := SelectServerDlg.GetServer;
   qB := TqBitObject.Connect(Srv.FHP, Srv.FUN, Srv.FPW);
   if not assigned(qB) then Exit;
-  qBMain := qB.GetMainData;
+
   qBPrefs := qB.GetPreferences;
-  DragAcceptFiles (Self.handle, True);
-  Timer.Interval := qBMain.Fserver_state.Frefresh_interval;
-  UpdateUI;
-  Timer.OnTimer(Nil);
-end;
 
-procedure TqNOXifyFrm.FormDestroy(Sender: TObject);
-begin
-  for var i := 0 to SG.RowCount - 1 do
-    for var j := 0 to SG.ColCount - 1 do
-      TGridData(SG.Objects[j, i]).Free;
-  qBPrefs.Free;
-  qBTInfo.Free;
-  qBMain.Free;
-  qB.Free;
-end;
+  ThPeers := TqBitTPeersThread.Create;
+  ThPeers.qBTh := qB.Clone;
 
-procedure TqNOXifyFrm.SGMouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
-var
-  P: TPoint;
-  ACol, ARow : integer;
-begin
+  ThMain := TqBitMainThread.Create;
+  ThMain.qBTh := qB.Clone;
 
-  SG.MouseToCell(X, Y, ACol, ARow);
-  if Button = mbRight then
+  ThInfo := TqBitTInfosThread.Create;
+  ThInfo.qBTh := qB.Clone;
+
+  ThTrkrs := TqBitTTrkrsThread.Create;
+  ThTrkrs.qBTh := qB.Clone;
+
+  IP := TExternalIP.FromURL();
+
+  FCurrentSelectedHash := '';
+  FMainLock := False;
+  // Init Frames :
+
+  MainFrame.DoCreate;
+  MainFrame.OnUpdateUIEvent := Self.DoUpdateMainUI;
+  MainFrame.OnRowsSelectedEvent := Self.DoRowsSelectedMain;
+  MainFrame.OnPopupEvent := Self.DoMainEventPopup;
+
+  var Row := -1;
+  Inc(Row); MainFrame.AddCol(Row, 'Name', 'Fname', VarFormatString, 240, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Size', 'Fsize', VarFormatBKM, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Total Size', 'Ftotal_size', VarFormatBKM, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Progress', 'Fprogress', VarFormatPercent, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Status', 'Fstate', VarFormatString, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Seeds', 'Fnum_seeds', VarFormatString, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Peers', 'Fnum_leechs', VarFormatString, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Down Speed', 'Fdlspeed', VarFormatBKMPerSec, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Upload Speed', 'Fupspeed', VarFormatBKMPerSec, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'ETA', 'Feta', VarFormatDeltaSec, 128, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Ratio', 'Fratio', VarFormatFloat2d, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Category', 'Fcategory', VarFormatString, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Tags', 'Ftags', VarFormatString, 84, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Added On', 'Fadded_on', VarFormatDate, 128, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Completed On', 'Fcompletion_on', VarFormatDate, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Tracker', 'Ftracker', VarFormatString, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Down Limit', 'Fdl_limit', VarFormatLimit, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Up Limit', 'Fdl_limit', VarFormatLimit, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Downloaded', 'Fdownloaded', VarFormatBKM, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Uploaded  ', 'Fuploaded', VarFormatBKM, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Session Downloaded', 'Fdownloaded_session', VarFormatBKM, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Session Uploaded  ', 'Fuploaded_session', VarFormatBKM, -1, True);
+  Inc(Row); MainFrame.AddCol(Row, 'Availability', 'Favailability', VarFormatMulti, -1, True);
+
+  var rttictx := TRttiContext.Create();
+  var rttitype := rttictx.GetType(TqBitTorrentType);
+  for var field in rttitype.GetFields do
   begin
-    if ARow = 0 then
-    begin
-      P.X := X; P.Y :=Y;
-      PMHdrCol.Tag := ACol;
-      PMHdrCol.Popup(SG.ClientToScreen(P).X - 8, SG.ClientToScreen(P).Y - 2);
-    end else begin
-      P.X := X; P.Y :=Y;
-      PMCol.Tag := ACol;
-      PMCol.Popup(SG.ClientToScreen(P).X - 8, SG.ClientToScreen(P).Y - 2);
-    end;
+    var Title := 'Raw: ' + field.Name;
+    Inc(Row); MainFrame.AddCol(Row, Title, field.Name, VarFormatString, -2, False);
   end;
+  rttictx.Free;
 
-  if Button <> mbLeft then Exit;
 
-  if (ARow = 0) and (GetKeyState(VK_SHIFT) < 0) then
+  PeersFrame.DoCreate;
+  PeersFrame.OnUpdateUIEvent := Self.DoUpdatePeersUI;
+  PeersFrame.OnRowsSelectedEvent := Self.DoRowsSelectedPeers;
+  Row := -1;
+  Inc(Row); PeersFrame.AddCol(Row, 'IP', 'Fip', VarFormatString, 84, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Port', 'Fport', VarFormatString, 84, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Country', 'Fcountry', VarFormatString, 84, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Connection', 'Fconnection', VarFormatString, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Flags', 'Fflags', VarFormatString, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Client', 'Fclient', VarFormatString, 100, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Progress', 'Fprogress', VarFormatPercent, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Down Speed', 'Fdl_speed', VarFormatBKMPerSec, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Up Speed', 'Fup_speed', VarFormatBKMPerSec, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Downloaded', 'Fdownloaded', VarFormatBKM, 72, True);
+  Inc(Row); PeersFrame.AddCol(Row, 'Uploaded', 'Fuploaded', VarFormatBKM, 72, True);
+
+  TrkrFrame.DoCreate;
+  TrkrFrame.OnUpdateUIEvent := Self.DoUpdateTrkrsUI;
+  Row := -1;
+  Inc(Row); TrkrFrame.AddCol(Row, 'URL', 'Furl', VarFormatString, 208, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Tier', 'Ftier', VarFormatString, 32, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Status', 'Fstatus', VarFormatTrackerStatus, 84, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Peers', 'Fnum_peers', VarFormatString, 84, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Seeds', 'Fnum_seeds', VarFormatString, 84, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Leeches', 'Fnum_leeches', VarFormatString, 84, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Donwloaded', 'Fnum_downloaded', VarFormatBKM, 84, True);
+  Inc(Row); TrkrFrame.AddCol(Row, 'Message', 'Fmsg', VarFormatString, 128, True);
+
+end;
+
+function TqBitMainForm.GetGridSelHashes: TStringList;
+begin
+  var Sel := Self.MainFrame.GetGridSel;
+  Result := TStringList.Create;
+  for var v in Sel do
+    Result.Add(TqBitTorrentType(TSGData(v).Obj)._FKey);
+  Sel.Free;
+end;
+
+function TqBitMainForm.GetGridSelTorrents: TObjectList<TqBitTorrentType>;
+begin
+  var Sel := Self.MainFrame.GetGridSel;
+  Result := TObjectList<TqBitTorrentType>.Create(False);
+  for var v in Sel do
+    Result.Add(TqBitTorrentType(TSGData(v).Obj));
+  Sel.Free;
+end;
+
+function TqBitMainForm.GetLastGridSelTorrent: TqBitTorrentType;
+begin
+  Result := nil;
+  var Sel := GetGridSelTorrents;
+  if (Sel <> nil) and (Sel.Count > 0) then
+    Result := Sel[ Sel.Count -1 ];
+  Sel.Free;
+end;
+
+procedure TqBitMainForm.ITMAddMagnetURLClick(Sender: TObject);
+begin
+  var URI := InputBox('Magnet URL Download :', 'URL : ', '');
+  if URI <> '' then qB.AddNewTorrentUrl(URI);
+end;
+
+procedure TqBitMainForm.ITMAddTFileClick(Sender: TObject);
+begin
+  if OpenTorrent.Execute then
   begin
-
+    AddTorrentDlg.qB := qB;
+    AddTorrentDlg.FileList := OpenTorrent.Files;
+    AddTorrentDlg.ShowModal;
   end;
-  if ARow < SG.FixedRows then Exit;
-  var GD := TGridData(SG.Objects[0, ARow]);
-  if GetKeyState(VK_CONTROL) < 0 then
-  begin
-    GD.Selected :=  not GD.Selected;
-    GetColData(0).LastRowSelected := ARow;
-    GetColData(0).LastHashSelected := GetRowData(ARow).Hash;
-    //qBTInfo.Free;
-    //qBTInfo := qB.GetTorrentGenericProperties(GetColData(0).LastHashSelected);
-  end else
-  if GetKeyState(VK_SHIFT) < 0 then
-  begin
-   for var i := Min(Arow, GetColData(0).LastRowSelected) to  Max(Arow, GetColData(0).LastRowSelected) do
-     GetRowData(i).Selected := True;
-  end else begin
-    for var i := 0 to SG.RowCount - 1 do
-      GetRowData(i).Selected := False;
-    GetColData(0).LastRowSelected := ARow;
-    GetColData(0).LastHashSelected := GetRowData(ARow).Hash;
-    //qBTInfo.Free;
-    //qBTInfo := qB.GetTorrentGenericProperties(GetColData(0).LastHashSelected);
-    GD.Selected := True;
-  end;
-  SG.Invalidate;
 end;
 
-procedure TqNOXifyFrm.SGMouseWheelDown(Sender: TObject; Shift: TShiftState;
-  MousePos: TPoint; var Handled: Boolean);
-begin
-  var MaxRow := 1;
-  while( SG.RowHeights[MaxRow] <> -1 ) do Inc(MaxRow);
-  if SG.VisibleRowCount < MaxRow then SG.TopRow := SG.TopRow + 4;
-  Handled := True;
-end;
-
-procedure TqNOXifyFrm.SGMouseWheelUp(Sender: TObject; Shift: TShiftState;
-  MousePos: TPoint; var Handled: Boolean);
-begin
-   SG.TopRow := Max(SG.TopRow - 4, 1);
-   Handled := True;
-end;
-
-procedure TqNOXifyFrm.ShowAllCol;
-begin
-end;
-
-procedure TqNOXifyFrm.TimerTimer(Sender: TObject);
-begin
-  var U := qB.GetMainData(qBMain.Frid);
-  qBMain.Merge(U);
-  for var T in qBMain.Ftorrents do
-    TqBitTorrentType(T.Value).Fhash := T.Key;
-  U.Free;
-  UpdateUI;
-end;
-
-procedure TqNOXifyFrm.WMDropFiles(var Msg: TMessage);
+procedure TqBitMainForm.WMDropFiles(var Msg: TMessage);
 var
   hDrop: THandle;
   FileNAme: string;
@@ -841,25 +327,57 @@ begin
   DragFinish(hDrop);
 end;
 
-procedure TqNOXifyFrm.ToggleSortCol(ACol: integer);
+
+procedure TqBitMainForm.ITMDelTOnlyClick(Sender: TObject);
 begin
-  if aCol < 0 then Exit;
-  var Current := GetRowData(0).SortField;
-  var Field :=  GetColData(ACol).Field;
-  if Current <> field then
-  begin
-    GetColData(0).SortField := Field;
-    GetColData(0).SortReverse := False;
-  end else
-    GetColData(0).SortReverse := not GetColData(0).SortReverse;
-  UpdateUI;
+  var SH := GetGridSelHashes;
+  qB.DeleteTorrents(SH, False);
+  Self.FCurrentSelectedHash := '';
+  SH.Free;
 end;
 
-procedure TqNOXifyFrm.SetLocation1Click(Sender: TObject);
+procedure TqBitMainForm.ITMDelWithDataClick(Sender: TObject);
 begin
-  var SH := GetSelectedGridHashes;
+  FMainLock := True;
+  var SH := GetGridSelHashes;
+  qB.DeleteTorrents(SH, True);
+  SH.Free;
+  FMainLock := False;
+end;
+
+procedure TqBitMainForm.ITMPauseClick(Sender: TObject);
+begin
+  var SH := GetGridSelHashes;
+  qB.PauseTorrents(SH);
+  SH.Free;
+end;
+
+procedure TqBitMainForm.ITMRenameClick(Sender: TObject);
+begin
+  var T := GetLastGridSelTorrent;
+  if not assigned(T) then Exit;
+  var K := T._Fkey;
+  var NewName := InputBox('Rename', 'New Name :', T.Fname);
+  if  NewName <> '' then qB.SetTorrentName(K, NewName);
+end;
+
+procedure TqBitMainForm.ITMResumeClick(Sender: TObject);
+begin
+  var SH := GetGridSelHashes;
+  qB.ResumeTorrents(SH);
+  SH.Free;
+end;
+
+procedure TqBitMainForm.ITMSelectAllClick(Sender: TObject);
+begin
+  Self.MainFrame.SelectAll
+end;
+
+procedure TqBitMainForm.ITMSetLocClick(Sender: TObject);
+begin
+  var SH := GetGridSelHashes;
   if SH.Count = 1 then
-    SetLocationDlg.Location.Text := Self.GetLastSelectedTorrent.Fsave_path
+    SetLocationDlg.Location.Text := Self.GetLastGridSelTorrent.Fsave_path
   else
     SetLocationDlg.Location.Text := qBPrefs.Fsave_path;
   if (SetLocationDlg.ShowModal = mrOk) then
@@ -867,85 +385,142 @@ begin
   SH.Free;
 end;
 
-procedure TqNOXifyFrm.SGDblClick(Sender: TObject);
-var
-  P : TPoint;
-  ACol, ARow : integer;
+procedure TqBitMainForm.PageControl1Change(Sender: TObject);
 begin
-  GetCursorPos(P) ;
-  SG.MouseToCell(SG.ScreenToClient(P).X, SG.ScreenToClient(P).Y, ACol, ARow);
-  ToggleSortCol(ACol);
+  case PageControl1.ActivePageIndex of
+  0: Self.ThInfo.Refresh := True;
+  1: Self.ThPeers.Refresh := True;
+  2: Self.ThTrkrs.Refresh := True;
+  end;
 end;
 
-procedure TqNOXifyFrm.SGDetailsSelectCell(Sender: TObject; ACol, ARow: Integer;
-  var CanSelect: Boolean);
+procedure TqBitMainForm.PMISpeedLimitsClick(Sender: TObject);
 begin
-  CanSelect := False;
-end;
-
-procedure TqNOXifyFrm.SGDrawCell(Sender: TObject; ACol, ARow: Integer; Rect: TRect;
-  State: TGridDrawState);
-begin
-
-  var FontColor := SG.Canvas.Font.Color;
-  var BrushColor := SG.Canvas.Brush.Color;
-
-  if Arow mod 2 = 1 then
-    SG.Canvas.Brush.Color := clWhite
-  else
-    SG.Canvas.Brush.Color := clCream;
-
-  if (ARow = 0) or (ACol = 0) then
-      SG.Canvas.Brush.Color := clMenu;
-
-  var GD := TGridData(SG.Objects[0, ARow]);
-  if GD.Selected  then
+  SpeedLimitsDlg.SetSpeedLimits(
+    qBPrefs.Fup_limit,
+    qBPrefs.Fdl_limit,
+    qBPrefs.Falt_up_limit,
+    qBPrefs.Falt_dl_limit
+  );
+  if SpeedLimitsDlg.ShowModal = mrOk then
   begin
-    SG.Canvas.Brush.Color := clNavy;
-    SG.Canvas.Font.Color := clWhite;
-  end else begin
-    SG.Canvas.Font.Color:=clBlack;
+    var NewPrefs := TqBitPreferencesType.Create;
+    SpeedLimitsDlg.GetSpeedLimits(
+      NewPrefs.Fup_limit,
+      NewPrefs.Fdl_limit,
+      NewPrefs.Falt_up_limit,
+      NewPrefs.Falt_dl_limit
+    );
+    qB.SetPreferences(NewPrefs);
+    qBPrefs.Free;
+    qBPrefs := qB.GetPreferences;
+    NewPrefs.Free;
+  end;
+end;
+
+procedure TqBitMainForm.StatusBarClick(Sender: TObject);
+begin
+  Qb.ToggleAlternativeSpeedLimits;
+  Self.ThMain.Refresh := True;
+end;
+
+procedure TqBitMainForm.UpdatePeersUI;
+begin
+  var RttiCtx := TRttiContext.Create();
+  var RttiType := RttiCtx.GetType(TqBitTorrentPeerDataType);
+
+  var TSortList := TObjectList<TqBitTorrentPeerDataType>.Create(False);
+  for var T in qBTPeers.Fpeers do
+  begin
+    TqBitTorrentPeerDataType(T.Value)._FKey := T.Key;
+    TSortList.Add(TqBitTorrentPeerDataType(T.Value));
   end;
 
-  SG.Canvas.FillRect(Rect);
-  SG.Canvas.TextRect (Rect, Rect.Left+4, Rect.Top+2, SG.Cells[ACol,ARow]);
+  TSortList.Sort(TComparer<TqBitTorrentPeerDataType>.Construct(
+    function (const L, R: TqBitTorrentPeerDataType): integer
+    begin
+      Result := 0;
+      for var Field in RttiType.GetFields do
+      begin
+        if Field.Name = Self.PeersFrame.SortField then
+        begin
+          var LVal := Field.GetValue(L).asVariant;
+          var RVal := Field.GetValue(R).asVariant;
+          if LVal > RVal then
+            if Self.PeersFrame.SortReverse then Result := -1 else Result := 1;
+          if RVal > LVal then
+            if Self.PeersFrame.SortReverse then Result := 1 else Result := -1;
+        end;
+      end;
+    end
+  ));
 
-  SG.Canvas.Brush.Color := BrushColor;
-  SG.Canvas.Font.Color := FontColor;
+  PeersFrame.RowUpdateStart;
+  for var T in TSortList do
+    PeersFrame.AddRow(TqBitTorrentPeerDataType(T).Fip, T);
+  PeersFrame.RowUpdateEnd;
+
+  TSortList.Free;
+  RttiCtx.Free;
+
 end;
 
-procedure TqNOXifyFrm.SGKeyUp(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
+procedure TqBitMainForm.UpdateMainUI;
 begin
-  if (Key = 65) and ( ssCtrl in Shift) then
-    for var i:= 1 to SG.RowCount  - 1 do
-      if assigned(GetRowData(i)) then
-        GetRowData(i).Selected := True;
-  UpdateUI;
-end;
+  if FMainLock then exit;
 
-procedure TqNOXifyFrm.UpdateUI;
-begin
-  Timer.Enabled := False;
-  SG.BeginUpdate;
-  var SH := GetSelectedGridHashes;
   var RttiCtx := TRttiContext.Create();
   var RttiType := RttiCtx.GetType(TqBitTorrentType);
 
-  var TL := TObjectList<TqBitTorrentType>.Create(False);
+  var TSortList := TObjectList<TqBitTorrentType>.Create(False);
+
+  if Assigned(qBMain.Ftorrents) then
   for var T in qBMain.Ftorrents do
   begin
-    TqBitTorrentType(T.Value).Fhash := T.Key;
-    TL.Add(TqBitTorrentType(T.Value));
+    TqBitTorrentType(T.Value)._FKey := T.Key;
+    TSortList.Add(TqBitTorrentType(T.Value));
+  end;
+
+  // Filtering Categories
+  for var i := TSortList.Count - 1 downto 0 do
+  begin
+    var ToDelete := False;
+    if CBCat.ItemIndex > 0  then
+    begin
+      if (CBCat.ItemIndex = 1)
+          and (TqBitTorrentType(TSortList[i]).Fcategory <> '')
+      then
+        ToDelete := True;
+      if (CBCat.ItemIndex > 1)
+          and (TqBitTorrentType(TSortList[i]).Fcategory <> CBCat.Items[CBCat.ItemIndex])
+      then
+        ToDelete := True;
+     end;
+
+     // Filtering Tags
+     if CBTag.ItemIndex > 0  then
+     begin
+      var Tag := TqBitTorrentType(TSortList[i]).Ftags;
+      if (CBTag.ItemIndex = 1) then
+          if (TqBitTorrentType(TSortList[i]).Ftags <> '')
+      then
+        ToDelete := True;
+      if (CBTag.ItemIndex > 1)
+          and (Pos(CBTag.Items[CBTag.ItemIndex], TqBitTorrentType(TSortList[i]).Ftags) = 0)
+      then
+        ToDelete := True;
+     end;
+
+     if ToDelete then TSortList.Delete(i);
   end;
 
   // Filtering Status
   for var j := 0 to CBStatus.Items.Count -1 do
     CBStatus.Items.Objects[j] := Nil;
-  for var i := TL.Count - 1 downto 0 do
+  for var i := TSortList.Count - 1 downto 0 do
   begin
     var ToKeep := False;
-    var Status := lowerCase(TqBitTorrentType(TL[i]).Fstate);
+    var Status := lowerCase(TqBitTorrentType(TSortList[i]).Fstate);
     for var j := 0 to CBStatus.Items.Count -1 do
     begin
       case j of
@@ -998,113 +573,55 @@ begin
 
       end;
     end;
-    if not ToKeep then TL.Delete(i);
-  end;
-
-  // Filtering Categories
-
-  for var i := TL.Count - 1 downto 0 do
-  begin
-    var ToDelete := False;
-    if CBCat.ItemIndex > 0  then
-    begin
-      if (CBCat.ItemIndex = 1)
-          and (TqBitTorrentType(TL[i]).Fcategory <> '')
-      then
-        ToDelete := True;
-      if (CBCat.ItemIndex > 1)
-          and (TqBitTorrentType(TL[i]).Fcategory <> CBCat.Items[CBCat.ItemIndex])
-      then
-        ToDelete := True;
-     end;
-     if CBTag.ItemIndex > 0  then
-     begin
-      var Tag := TqBitTorrentType(TL[i]).Ftags;
-      if (CBTag.ItemIndex = 1) then
-          if (TqBitTorrentType(TL[i]).Ftags <> '')
-      then
-        ToDelete := True;
-      if (CBTag.ItemIndex > 1)
-          and (Pos(CBTag.Items[CBTag.ItemIndex], TqBitTorrentType(TL[i]).Ftags) = 0)
-      then
-        ToDelete := True;
-     end;
-     if ToDelete then TL.Delete(i);
+    if not ToKeep then TSortList.Delete(i);
   end;
 
   // Filtering String
   if EditSearch.Text <> '' then
-    for var i := TL.Count - 1 downto 0 do
+    for var i := TSortList.Count - 1 downto 0 do
     begin
-      if Pos(LowerCase(Trim(EditSearch.Text)), LowerCase(TqBitTorrentType(TL[i]).Fname)) = 0 then
-        TL.Delete(i);
-    end;
+      if Pos(LowerCase(Trim(EditSearch.Text)), LowerCase(TqBitTorrentType(TSortList[i]).Fname)) = 0 then
+        TSortList.Delete(i);
+  end;
 
   // Sorting
-  TL.Sort(TComparer<TqBitTorrentType>.Construct(
+  TSortList.Sort(TComparer<TqBitTorrentType>.Construct(
       function (const L, R: TqBitTorrentType): integer
       begin
         Result := 0;
-        var MD := GetColData(0);
         for var Field in RttiType.GetFields do
         begin
-          if Field.Name = MD.SortField then
-            begin
-              var LVal := Field.GetValue(L).asVariant;
-              var RVal := Field.GetValue(R).asVariant;
-              if LVal > RVal then
-                if MD.SortReverse then Result := -1 else Result := 1;
-              if RVal > LVal then
-                if MD.SortReverse then Result := 1 else Result := -1;
-           end;
+          if Field.Name = Self.MainFrame.SortField then
+          begin
+            var LVal := Field.GetValue(L).asVariant;
+            var RVal := Field.GetValue(R).asVariant;
+            if LVal > RVal then
+              if Self.MainFrame.SortReverse then Result := -1 else Result := 1;
+            if RVal > LVal then
+              if Self.MainFrame.SortReverse then Result := 1 else Result := -1;
+          end;
         end;
       end
   ));
 
   // Displaying Grid
-  for var Col := 0 to SG.RowCount - 1 do
-  begin
-    var GD := GetColData(Col);
-    if assigned(GD) then
-    begin
-      if GD.Field = GetColData(0).SortField then
-      begin
-        if not GetColData(0).SortReverse then
-          SG.Cells[Col, 0] := '🡻 ' + GetColData(Col).Name
-        else
-          SG.Cells[Col, 0] := '🡹 ' + GetColData(Col).Name ;
-      end else
-        SG.Cells[Col, 0] := GetColData(Col).Name;
-      var Row := 1;
-      for var T in TL do
-      begin
-        for var Field in RttiType.GetFields do
-          if  Field.Name = GD.Field then
-          begin
-            SG.Cells[Col, Row] := GD.Formater( Field.GetValue(T).asVariant, nil);
-            SG.RowHeights[Row] := ROWHEIGHT;
-            GetRowData(Row).Hash := T.Fhash;
-            break;
-          end;
-        GetRowData(Row).Selected := SH.IndexOf(T.Fhash) <> -1;
-        Inc(Row);
-      end;
-    end;
-  end;
-  for var i := TL.count+1 to SG.RowCount - 1  do
-    if SG.RowHeights[i] > -1 then SG.RowHeights[i] := -1;
 
-  // MainForm
-  var HL := Self.GetAllGridHashes;
-  Caption:= Format('qNOXify :  %s (%d/%d Torrents)', [
-              qB.HostPath,
-              (HL.Count - 1),
-              qbMain.Ftorrents.Count
-            ]);
-  HL.Free;
+  MainFrame.RowUpdateStart;
+  for var T in TSortList do
+    MainFrame.AddRow(TqBitTorrentType(T)._FKey, T);
+  MainFrame.RowUpdateEnd;
+
+  // Displaying Tags
+  if qBMain.Ffull_update or qBMain._Ftags_changed then
+  begin
+    CBTag.Items.Clear;
+    CBTag.Items.Add('All');
+    CBTag.Items.Add('Unassigned');
+    for var Tag in qBMain.Ftags do CBTag.Items.Add(Tag);
+    CBTag.ItemIndex := 0;
+  end;
 
   // Displaying Status
-
   var StatusIndex := CBStatus.ItemIndex;
   for var i := 0 to CBStatus.Items.Count -1 do
   case i of
@@ -1118,9 +635,9 @@ begin
   end;
   CBStatus.ItemIndex := StatusIndex;
 
-  // Displaying Categories
+    // Displaying Categories
 
-  if qBMain.Ffull_update or qBMain.Fcategories_changed then
+  if qBMain.Ffull_update or qBMain._Fcategories_changed then
   begin
     CBCat.Items.Clear;
     CBCat.Items.Add('All');
@@ -1129,26 +646,16 @@ begin
     CBCat.ItemIndex := 0;
   end;
 
-  // Displaying Tags
-
-  if qBMain.Ffull_update or qBMain.Ftags_changed then
-  begin
-    CBTag.Items.Clear;
-    CBTag.Items.Add('All');
-    CBTag.Items.Add('Unassigned');
-    for var Tag in qBMain.Ftags do CBTag.Items.Add(Tag);
-    CBTag.ItemIndex := 0;
-  end;
 
   // StatusBar;
 
   StatusBar.Panels[0].Text := TitleCase( qBMain.Fserver_state.Fconnection_status );
-  StatusBar.Panels[1].Text := 'Free space: ' + VarFormatBKM(qBMain.Fserver_state.Ffree_space_on_disk);
+  StatusBar.Panels[1].Text := ' Free space: ' + VarFormatBKM(qBMain.Fserver_state.Ffree_space_on_disk);
   StatusBar.Panels[2].Text := Format('DHT: %s nodes', [VarToStr(qBMain.Fserver_state.Fdht_nodes)]);
   if qBMain.Fserver_state.Fuse_alt_speed_limits then
-    StatusBar.Panels[3].Text := ' @ ' // ' ⬊ '
+    StatusBar.Panels[3].Text := ' @ ' // ' ? '
   else
-    StatusBar.Panels[3].Text := '  '; // ' ⬈ ';
+    StatusBar.Panels[3].Text := '  '; // ' ? ';
   if qBMain.Fserver_state.Fdl_rate_limit > 0 then
     StatusBar.Panels[4].Text :=
       Format('🡻 %s [%s]', [
@@ -1157,7 +664,7 @@ begin
       ])
   else
     StatusBar.Panels[4].Text :=
-      Format('🡻 %s [∞]', [
+      Format('🡻 %s [?]', [
          VarFormatBKMPerSec(qBMain.Fserver_state.Fdl_info_speed)
       ]);
   if qBMain.Fserver_state.Fup_rate_limit > 0 then
@@ -1168,67 +675,70 @@ begin
       ])
   else
     StatusBar.Panels[5].Text :=
-      Format('🡹 %s [∞]', [
+      Format('🡹 %s [?]', [
          VarFormatBKMPerSec(qBMain.Fserver_state.Fup_info_speed)
       ]);
+  if assigned(IP) then
+    StatusBar.Panels[6].Text := 'IP : ' + IP.Fip + ' / ' + IP.Fcountry;
+  // Caption := qBMain.Ftorrents.Count.ToString;
+  Caption :=  Format('qNOXify : %s - %s/%s Torrents',
+              [
+                qB.HostPath,
+                TSortList.Count.ToString,
+                qBMain.Ftorrents.Count.ToString
+              ]);
 
-  // Selecting First Row
+  TSortList.Free;
+  RttiCtx.Free;
+end;
 
-  if qBMain.Ffull_update and TL.count > 0 then
-  begin
-    GetRowData(1).Selected := True;
-    GetColData(0).LastRowSelected := 1;
-    GetColData(0).LastHashSelected := GetRowData(1).Hash;
-  end;
+procedure TqBitMainForm.UpdateTrkrsUI;
+var
+  LVal, RVal : variant;
+begin
+  var RttiCtx := TRttiContext.Create();
+  var RttiType := RttiCtx.GetType(TqBitTrackerType);
 
-  if (GetLastSelectedTorrent <> Nil) and (PageControl1.ActivePageIndex = 1) then
-  begin
-    for var i := 0 to SLPeers.ColCount -1 do
-      for var j := 0 to SLPeers.RowCount -1 do
-        SLPeers.Cells[i , j] := '';
+  var TSortList := TObjectList<TqBitTrackerType>.Create(False);
+  for var T in qBTTrkrs.Ftrackers do TSortList.Add(TqBitTrackerType(T));
 
-    var T := GetLastSelectedTorrent;
-    var qBTPeers := qB.GetTorrentPeersData(T.Fhash);
-    var Col := -1;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Region/Country'; SLPeers.ColWidths[Col] := 120;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'IP'; SLPeers.ColWidths[Col] := 100;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Port'; SLPeers.ColWidths[Col] := 60;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Flags'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Client'; SLPeers.ColWidths[Col] := 100;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Progress'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Down Speed'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Up Speed'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Downloaded'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Uploaded'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Relevance'; SLPeers.ColWidths[Col] := 80;
-    Inc(Col); SLPeers.Cells[Col, 0] := 'Files'; SLPeers.ColWidths[Col] := 160;
-    SLPeers.RowCount := qBTPeers.Fpeers.Count + 1;
-    var Row := 1;
-    for var P in qBTPeers.Fpeers do
+  TSortList.Sort(TComparer<TqBitTrackerType>.Construct(
+    function (const L, R: TqBitTrackerType): integer
     begin
-      Col := -1;
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Fcountry;
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Fip;
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Fport;
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Fflags;
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Fclient;
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatPercent( TqBitTorrentPeerDataType(P.Value).Fprogress );
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatBKM( TqBitTorrentPeerDataType(P.Value).Fdl_speed );
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatBKM( TqBitTorrentPeerDataType(P.Value).Fup_speed );
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatBKM( TqBitTorrentPeerDataType(P.Value).Fdownloaded );
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatBKM( TqBitTorrentPeerDataType(P.Value).Fuploaded );
-      Inc(Col); SLPeers.Cells[Col, Row] := VarFormatPercent( TqBitTorrentPeerDataType(P.Value).Frelevance );
-      Inc(Col); SLPeers.Cells[Col, Row] := TqBitTorrentPeerDataType(P.Value).Ffiles;
-      Inc(Row);
-    end;
-    qBTPeers.Free;
+      Result := 0;
+      for var Field in RttiType.GetFields do
+      begin
+        if Field.Name = Self.TrkrFrame.SortField then
+        begin
+          if Field.Name = 'Ftier' then  // Ftier can be real and/or string : force to string
+          begin
+             LVal := VarToStr(Field.GetValue(L).asVariant);
+            RVal := VarToStr(Field.GetValue(R).asVariant);
+          end else begin
+            LVal := Field.GetValue(L).asVariant;
+            RVal := Field.GetValue(R).asVariant;
+          end;
+          if LVal > RVal then
+            if Self.TrkrFrame.SortReverse then Result := -1 else Result := 1;
+          if RVal > LVal then
+            if Self.TrkrFrame.SortReverse then Result := 1 else Result := -1;
+        end;
+      end;
+    end
+  ));
 
-  end else
-  if (GetLastSelectedTorrent <> Nil) and (PageControl1.ActivePageIndex = 0) then
-  begin
-    var T := GetLastSelectedTorrent;
-    qBTInfo.Free;
-    qBTInfo := qB.GetTorrentGenericProperties(T.Fhash);
+  TrkrFrame.RowUpdateStart;
+  for var T in TSortList do
+    TrkrFrame.AddRow(TqBitTrackerType(T).Ftier, T);
+  TrkrFrame.RowUpdateEnd;
+
+  TSortList.Free;
+  RttiCtx.Free;
+end;
+
+procedure TqBitMainForm.UpdateTInfosUI;
+begin
+    //if Self.MainFrame.LastSelectedData then
 
     SGDetails.ColAlignments[0] := taRightJustify;
     SGDetails.ColWidths[0] := 128;
@@ -1269,40 +779,319 @@ begin
     SGDetails.Cells[4, 4] := 'Wasted : ';
     SGDetails.Cells[4, 5] := 'Last Seen Complete : ';
 
-    SGDetails.Cells[1, 1] := VarFormatDuration(T.Ftime_active, T);
+    var T := GetLastGridSelTorrent;
+    if T = nil then Exit;
+
+    SGDetails.Cells[1, 1] := VarFormatDuration(T.Ftime_active);
     SGDetails.Cells[1, 2] := Format('%s (%s this session)',
-      [VarFormatBKM(T.Fdownloaded, T), VarFormatBKM(T.Fdownloaded_session, T)]);
-    SGDetails.Cells[1, 3] := VarFormatBKMPerSec(T.Fdlspeed, T);
-    SGDetails.Cells[1, 4] := VarFormatLimit(T.Fdl_limit, T);
-    SGDetails.Cells[1, 5] := VarFormatFloat2d(T.Fratio, T);
-    SGDetails.Cells[1, 7] := VarFormatBKM(T.Fsize, T);
-    SGDetails.Cells[1, 8] := VarFormatDate(T.Fadded_on, T);
-    SGDetails.Cells[1, 9] := VarFormatString(T.Fhash, T);
-    SGDetails.Cells[1, 10] := VarFormatString(T.Fsave_path, T);
-    SGDetails.Cells[1, 11] := VarFormatString(qbTInfo.Fcomment, qBTInfo);
+      [VarFormatBKM(T.Fdownloaded), VarFormatBKM(T.Fdownloaded_session)]);
+    SGDetails.Cells[1, 3] := VarFormatBKMPerSec(T.Fdlspeed);
+    SGDetails.Cells[1, 4] := VarFormatLimit(T.Fdl_limit);
+    SGDetails.Cells[1, 5] := VarFormatFloat2d(T.Fratio);
+    SGDetails.Cells[1, 7] := VarFormatBKM(T.Fsize);
+    SGDetails.Cells[1, 8] := VarFormatDate(T.Fadded_on);
+    SGDetails.Cells[1, 9] := VarFormatString(T._Fkey);
+    SGDetails.Cells[1, 10] := VarFormatString(T.Fsave_path);
+    SGDetails.Cells[1, 11] := VarFormatString(qbTInfo.Fcomment);
 
-    SGDetails.Cells[3, 1] := VarFormatDeltaSec(T.Feta, T);
+    SGDetails.Cells[3, 1] := VarFormatDeltaSec(T.Feta);
     SGDetails.Cells[3, 2] := Format('%s (%s this session)',
-      [VarFormatBKM(T.Fuploaded, T), VarFormatBKM(T.Fuploaded_session, T)]);
-    SGDetails.Cells[3, 3] := VarFormatBKMPerSec(T.Fupspeed, T);
-    SGDetails.Cells[3, 4] := VarFormatLimit(T.Fup_limit, T);
-      SGDetails.Cells[3, 5] := VarFormatDuration(qBTInfo.Freannounce, T);
+      [VarFormatBKM(T.Fuploaded), VarFormatBKM(T.Fuploaded_session)]);
+    SGDetails.Cells[3, 3] := VarFormatBKMPerSec(T.Fupspeed);
+    SGDetails.Cells[3, 4] := VarFormatLimit(T.Fup_limit);
+      SGDetails.Cells[3, 5] := VarFormatDuration(qBTInfo.Freannounce);
     SGDetails.Cells[3, 7] :=
-      Format('%s x %s (have %s )', [VarToStr(qBTInfo.Fpieces_num), VarFormatBKM(qBTInfo.Fpiece_size, T), VarToStr(qBTInfo.Fpieces_have)]);
-    SGDetails.Cells[3, 8] := VarFormatDate(T.Fcompletion_on, T);
+      Format('%s x %s (have %s )', [VarToStr(qBTInfo.Fpieces_num), VarFormatBKM(qBTInfo.Fpiece_size), VarToStr(qBTInfo.Fpieces_have)]);
+    SGDetails.Cells[3, 8] := VarFormatDate(T.Fcompletion_on);
 
-    SGDetails.Cells[5, 1] := Format('%s (%s max)', [VarToStr(qBTInfo.Fnb_connections), VarFormatLimit(qBTInfo.Fnb_connections_limit, qBTInfo)]);
+    SGDetails.Cells[5, 1] := Format('%s (%s max)', [VarToStr(qBTInfo.Fnb_connections), VarFormatLimit(qBTInfo.Fnb_connections_limit)]);
     SGDetails.Cells[5, 2] := Format('%s (%s total)', [VarToStr(T.Fnum_seeds), qBTInfo.Fseeds_total]);
     SGDetails.Cells[5, 3] := Format('%s (%s total)', [VarToStr(T.Fnum_leechs), qBTInfo.Fpeers_total]);
-    SGDetails.Cells[5, 4] := VarFormatBKM(qBTInfo.Ftotal_wasted, qBTInfo);
-    SGDetails.Cells[5, 5] := VarFormatDate(qBTInfo.Flast_seen, qBTInfo);
-  end;
-
-  SH.Free;
-  RttiCtx.Free;
-  TL.Free;
-  SG.EndUpdate;
-  Timer.Enabled := True;
+    SGDetails.Cells[5, 4] := VarFormatBKM(qBTInfo.Ftotal_wasted);
+    SGDetails.Cells[5, 5] := VarFormatDate(qBTInfo.Flast_seen);
 end;
+
+procedure TqBitMainForm.FormDestroy(Sender: TObject);
+begin
+  FreeAndNil(IP);
+  FreeAndNil(qBPrefs);
+  FreeAndNil(ThMain);
+  FreeAndNil(ThInfo);
+  FreeAndNil(ThPeers);
+  FreeAndNil(ThTrkrs);
+  FreeAndNil(qBMain);
+  FreeAndNil(qBTPeers);
+  FreeAndNil(qBTTrkrs);
+  FreeAndNil(qBTinfo);
+  TrkrFrame.DoDestroy;
+  PeersFrame.DoDestroy;
+  MainFrame.DoDestroy;
+  FreeAndNil(qB);
+end;
+
+{$REGION 'Frames callbacks'}
+
+procedure TqBitMainForm.BitBtn1Click(Sender: TObject);
+begin
+  Self.EditSearch.Clear
+end;
+
+procedure TqBitMainForm.DoMainEventPopup(Sender: TObject; X, Y, aCol,
+  aRow: integer);
+begin
+  //FMainLock := True;
+  try
+    PMMain.Popup(X,Y);
+  finally
+    //FMainLock := False;
+  end;
+end;
+
+procedure TqBitMainForm.DoRowsSelectedMain(Sender: TObject);
+begin
+  var SelHashes := GetGridSelHashes;
+  if SelHashes.Count = 0 then
+  begin
+    FCurrentSelectedHash := '';
+  end else begin
+    if FCurrentSelectedHash <> SelHashes[ SelHashes.Count -1 ] then
+    begin
+      FCurrentSelectedHash := SelHashes[ SelHashes.Count -1 ];
+      Self.ThPeers.Refresh := True;
+      Self.ThTrkrs.Refresh := True;
+      Self.ThInfo.Refresh := True;
+    end;
+  end;
+  SelHashes.Free;
+end;
+
+procedure TqBitMainForm.DoRowsSelectedPeers(Sender: TObject);
+begin
+//
+end;
+
+procedure TqBitMainForm.DoUpdateMainUI(Sender: TObject);
+begin
+  Self.UpdateMainUI;
+end;
+
+procedure TqBitMainForm.DoUpdatePeersUI(Sender: TObject);
+begin
+  Self.UpdatePeersUI;
+end;
+
+procedure TqBitMainForm.DoUpdateTrkrsUI(Sender: TObject);
+begin
+  Self.UpdateTrkrsUI;
+end;
+
+procedure TqBitMainForm.DoUpdateTinfoUI(Sender: TObject);
+begin
+  Self.UpdateTinfosUI;
+end;
+
+{$ENDREGION}
+
+{$REGION 'TqBitThread Sync callbacks'}
+
+procedure TqBitMainForm.ThreadDisconnect(Sender: TThread);
+begin
+  //
+end;
+
+procedure TqBitMainForm.ThreadMainUpdated(Sender: TqBitMainThread);
+begin
+  FreeAndNil(qBMain);
+  qBMain := TqBitMainDataType( Sender.qBMain.Clone );
+  UpdateMainUI;
+end;
+
+procedure TqBitMainForm.ThreadGetSelectedHash(Sender: TqBitThread);
+begin
+  Sender.Hash :='';
+  case PageControl1.ActivePageIndex of
+  0: begin
+     if Sender is TqBitTInfosThread then
+       Sender.Hash := Self.FCurrentSelectedHash;
+  end;
+  1: begin
+     if Sender is TqBitTPeersThread then
+       Sender.Hash := Self.FCurrentSelectedHash;
+  end;
+  2: begin
+     if Sender is TqBitTTrkrsThread then
+       Sender.Hash := Self.FCurrentSelectedHash;
+  end;
+  end;
+end;
+
+procedure TqBitMainForm.ThreadTPeersUpdated(Sender: TqBitTPeersThread);
+begin
+  FreeAndNil(qBTPeers);
+  qBTPeers := TqBitTorrentPeersDataType( Sender.qBTPeers.Clone );
+  UpdatePeersUI;
+end;
+
+procedure TqBitMainForm.ThreadTTrkrUpdated(Sender: TqBitTTrkrsThread);
+begin
+  FreeAndNil(qBTTrkrs);
+  qBTTrkrs := TqBitTrackersType( Sender.qBTTrkrs.Clone );
+  UpdateTrkrsUI;
+end;
+
+procedure TqBitMainForm.ThreadTInfoUpdated(Sender: TqBitTInfosThread);
+begin
+  FreeAndNil(Self.qBTInfo);
+  qBTInfo := TqBitTorrentInfoType( Sender.qBTInfo.Clone );
+  UpdateTinfosUI;
+end;
+
+{$ENDREGION}
+
+{$REGION 'TqBitThreads Implementation'}
+
+{ TqBitTPeersThread }
+
+procedure TqBitTPeersThread.Execute;
+begin
+  var CurrentHash := '';
+  while not Terminated do
+  begin
+    Refresh := False;
+    var Tme := GetTickCount;
+    Synchronize( procedure begin qBitMainForm.ThreadGetSelectedHash(Self); end );
+    if Hash <> '' then
+    begin
+      if Hash <> CurrentHash then
+      begin
+        CurrentHash := Hash;
+        FreeAndNil(qBTPeers);
+        qBTPeers := qBTh.GetTorrentPeersData(Hash, 0);
+        if qBTPeers = Nil then
+                          beep;
+      end else begin
+        if qBTPeers = Nil then
+                          beep;
+        var U := qBTh.GetTorrentPeersData(Hash, qBTPeers.Frid);
+        if U = nil then
+        begin
+          //Synchronize( procedure begin qBitMainForm.ThreadDisconnect(Self); end );
+          //Terminate;
+        end else begin
+          qBTPeers.Merge(U);
+          FreeAndNil(U);
+        end;
+      end;
+      Synchronize( procedure begin qBitMainForm.ThreadTPeersUpdated(Self); end );
+    end else begin
+      CurrentHash := '';
+      FreeAndNil(qBTPeers);
+    end;
+    while
+      (GetTickCount - Tme < THREAD_WAIT_TIME_ME)
+      and (not Terminated) and (not Refresh)
+    do
+      Sleep(250);
+  end;
+  FreeAndNil(qBTPeers);
+  FreeAndNil(qBTh);
+end;
+
+{ TqBitTInfoThread }
+
+procedure TqBitTInfosThread.Execute;
+begin
+  var CurrentHash := '';
+  while not Terminated do
+  begin
+    Refresh := False;
+    var Tme := GetTickCount;
+    Synchronize( procedure begin qBitMainForm.ThreadGetSelectedHash(Self); end );
+    FreeAndNil(qBTInfo);
+    if Hash <> '' then
+    begin
+        qBTInfo := qBTh.GetTorrentGenericProperties(Hash);
+        if qBTInfo = nil then
+        begin
+          // Synchronize( procedure begin qBitMainForm.ThreadDisconnect(Self); end );
+          // Terminate;
+        end else
+          Synchronize( procedure begin qBitMainForm.ThreadTInfoUpdated(Self); end );
+    end;
+    while
+      (GetTickCount - Tme < THREAD_WAIT_TIME_ME)
+      and (not Terminated) and (not Refresh)
+    do
+      Sleep(250);
+  end;
+  FreeAndNil(qBTInfo);
+  FreeAndNil(qBTh);
+end;
+
+
+{ TqBitMainThread }
+
+procedure TqBitMainThread.Execute;
+begin
+  qBMain := qBTh.GetMainData(0); // Full server data update
+  Synchronize( procedure begin qBitMainForm.ThreadMainUpdated(Self); end );
+  while not Terminated do
+  begin
+    Refresh := False;
+    var Tme := GetTickCount;
+    var U := qBTh.GetMainData(qBMain.Frid); // get differential data from last call
+    if U = nil then
+    begin
+      Synchronize( procedure begin qBitMainForm.ThreadDisconnect(Self); end );
+      Terminate;
+    end else begin
+      qBMain.Merge(U); // Merge to qBMain to be update to date
+      U.Free;
+      Synchronize( procedure begin qBitMainForm.ThreadMainUpdated(Self); end );
+      while
+        (GetTickCount - Tme < THREAD_WAIT_TIME_ME)
+        and (not Terminated) and (not Refresh)
+      do
+        Sleep(250);
+    end;
+  end;
+  FreeAndNil(qBMain);
+  FreeAndNil(qBTh);
+end;
+
+{ TqBitTTrkrsThread }
+
+procedure TqBitTTrkrsThread.Execute;
+begin
+  var CurrentHash := '';
+  while not Terminated do
+  begin
+    Refresh := False;
+    var Tme := GetTickCount;
+    Synchronize( procedure begin qBitMainForm.ThreadGetSelectedHash(Self); end );
+    FreeAndNil(qBTTrkrs);
+    if Hash <> '' then
+    begin
+        qBTTrkrs := qBTh.GetTorrentTrackers(Hash);
+        if qBTTrkrs = nil then
+        begin
+          // Synchronize( procedure begin qBitMainForm.ThreadDisconnect(Self); end );
+          // Terminate;
+        end else
+          Synchronize( procedure begin qBitMainForm.ThreadTTrkrUpdated(Self); end );
+    end;
+    while
+      (GetTickCount - Tme < THREAD_WAIT_TIME_ME)
+      and (not Terminated) and (not Refresh)
+    do
+      Sleep(250);
+  end;
+  FreeAndNil(qBTTrkrs);
+  FreeAndNil(qBTh)
+
+end;
+
+{$ENDREGION}
+
 
 end.
